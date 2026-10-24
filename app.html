@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-Library Usage Monitoring System</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="favicon-180.png">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="layout">
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="crest"><img src="logo.png" alt="NORSU seal" style="width:100%;height:100%;object-fit:contain;"></div>
+      <div class="names">NORSU<br>GUIHULNGAN<br><span class="sub">CAMPUS</span></div>
+    </div>
+    <div class="sysname">E-Library<small>Usage Monitoring System</small></div>
+    <nav class="sidenav" id="sidenav"></nav>
+    <button class="logout" id="logoutBtn"><span class="icon">↩</span> Logout</button>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="menuBtn" id="menuBtn" aria-label="Open menu">☰</button>
+      <div class="topbar-right">
+        <div class="datebadge" id="dateBadge"></div>
+        <div class="dropwrap">
+          <button class="iconBtn" id="notifBtn" aria-label="Notifications">🔔<span class="notifdot" id="notifDot" hidden></span></button>
+          <div class="dropdown" id="notifDropdown" hidden>
+            <div class="dropdown-title">Notifications</div>
+            <div id="notifList"></div>
+          </div>
+        </div>
+        <div class="dropwrap">
+          <button class="profileBtn" id="profileBtn">
+            <span class="avatar" id="avatarSpan">👤</span>
+            <span id="profileName">Account</span>
+            <span class="chev">⌄</span>
+          </button>
+          <div class="dropdown dropdown-right" id="profileDropdown" hidden>
+            <div class="dropdown-title" id="profileNameFull"></div>
+            <div class="dropdown-sub" id="profileEmail"></div>
+            <button class="dropdown-item" id="themeToggleBtn">🌙 Dark Mode</button>
+            <button class="dropdown-item" id="changePhotoBtn">🖼 Change Photo</button>
+            <button class="dropdown-item" id="removePhotoBtn" hidden>🗑 Remove Photo</button>
+            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/webp" hidden>
+            <button class="dropdown-item" id="logoutBtn2">↩ Logout</button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <main class="content" id="app"><div class="empty">Loading…</div></main>
+  </div>
+</div>
+<div class="modalOverlay" id="cropOverlay" hidden>
+  <div class="modalBox">
+    <h3 style="margin:0 0 4px;">Adjust Your Photo</h3>
+    <p class="lead" style="margin:0 0 10px;">Drag to reposition, use the slider or scroll to zoom.</p>
+    <div class="cropperWrap"><canvas id="cropCanvas" width="320" height="320"></canvas></div>
+    <div class="cropControls">
+      <span style="font-size:.8rem;color:var(--muted);">🔍</span>
+      <input type="range" id="zoomRange" min="1" max="4" step="0.02" value="1">
+    </div>
+    <div class="modalActions">
+      <button class="btn secondary" id="cropCancelBtn">Cancel</button>
+      <button class="btn" id="cropSaveBtn">Save Photo</button>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="lib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

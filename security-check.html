@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NORSU E-Library - Security self-check</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .wrap{max-width:860px;margin:0 auto;padding:24px 16px 60px;}
+  td.res{white-space:nowrap;font-weight:700;}
+  .pass{color:var(--green);} .fail{color:var(--danger);} .skip{color:var(--muted);}
+  .note{color:var(--muted);font-size:.78rem;}
+  code{background:var(--bg);padding:1px 5px;border-radius:5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p style="margin:0 0 8px"><a href="app.html">&larr; Back to the app</a></p>
+  <h2>Security self-check</h2>
+  <p class="lead">This page signs in as <b>whoever you are logged in as</b> and tries things that account must <b>not</b> be able to do
+  (reading other people's data, approving itself, opening a PDF without it being logged...). Every line should say PASS.
+  Run it once as a <b>student</b> and once as <b>staff</b>, after every change to <code>supabase/setup.sql</code>.</p>
+
+  <div class="card">
+    <div id="who" class="lead" style="margin:0 0 12px">Checking who you are...</div>
+    <button class="btn" id="run" disabled>Run the checks</button>
+  </div>
+
+  <div class="card" id="out" style="display:none;overflow-x:auto">
+    <h3>Results</h3>
+    <div id="summary" style="margin-bottom:10px;font-weight:700"></div>
+    <table><thead><tr><th></th><th>Check</th><th>What should happen</th><th>What happened</th></tr></thead><tbody id="rows"></tbody></table>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="lib.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const rows = [];
+function add(status, name, expected, happened){ rows.push({ status, name, expected, happened }); }
+const msg = e => (e && (e.message || e.code)) ? String(e.message || e.code).slice(0, 140) : 'no error';
+// a 1x1 JPEG, used only for the upload tests
+const TINY_JPEG = Uint8Array.from(atob('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwC9RRRXonGf/9k='), c => c.charCodeAt(0));
+const TINY_PDF = new Blob(['%PDF-1.4\n%security-test\n'], { type: 'application/pdf' });
+
+async function main(){
+  if (window.sbMissing) { $('who').textContent = window.sbMissingReason; return; }
+  const { data: sd } = await sb.auth.getSession();
+  if (!sd || !sd.session) { $('who').innerHTML = 'You are not signed in. <a href="index.html">Sign in</a> first, then come back to this page.'; return; }
+  window.myId = sd.session.user.id;
+  const { data: me } = await sb.from('profiles').select('*').eq('id', myId).maybeSingle();
+  if (!me) { $('who').textContent = 'Your profile was not found - run supabase/setup.sql first.'; return; }
+  window.me = me;
+  $('who').textContent = `Signed in as ${me.name} (${me.email}) - role: ${me.user_role === 'staff' ? 'STAFF' : 'student'}, status: ${me.status}.`;
+  $('run').disabled = false;
+}
+
+async function runChecks(){
+  rows.length = 0; $('run').disabled = true; $('run').textContent = 'Running...';
+  const isStaff = me.user_role === 'staff';
+  const { data: books } = await sb.from('books').select('id,file_name');
+  const anyBook = (books || [])[0];
+  const bookWithPdf = (books || []).find(b => b.file_name);
+
+  // 1 ------------------------------------------------------------------ profiles
+  {
+    const r = await sb.from('profiles').select('id');
+    if (isStaff) add(!r.error && r.data.length >= 1 ? 'pass' : 'fail', 'Staff can list all profiles', 'allowed', r.error ? msg(r.error) : `${r.data.length} profile(s) returned`);
+    else add(!r.error && r.data.length === 1 && r.data[0].id === myId ? 'pass' : 'fail', 'A student sees ONLY their own profile', 'exactly 1 row (yours)', r.error ? msg(r.error) : `${r.data.length} row(s) returned`);
+  }
+  // 2 ------------------------------------------------------------------ cannot self-promote
+  if (!isStaff) {
+    await sb.from('profiles').update({ status: 'approved', user_role: 'staff' }).eq('id', myId);
+    const { data: after } = await sb.from('profiles').select('user_role,status').eq('id', myId).maybeSingle();
+    const same = after && after.user_role === me.user_role && after.status === me.status;
+    add(same ? 'pass' : 'fail', 'Cannot make myself staff / approved by editing my profile', 'blocked, nothing changes', same ? 'blocked' : 'CHANGED! fix with the SQL in SETUP.md and re-run setup.sql');
+  } else add('skip', 'Cannot make myself staff by editing my profile', 'blocked', 'only meaningful for a student account');
+  // 3 ------------------------------------------------------------------ cannot forge log rows
+  if (anyBook) {
+    const r = await sb.from('access_log').insert({ user_id: myId, book_id: anyBook.id });
+    add(r.error ? 'pass' : 'fail', 'Cannot write fake rows into the access log', 'denied', r.error ? 'denied: ' + msg(r.error) : 'ALLOWED! delete that row and re-run setup.sql');
+  } else add('skip', 'Cannot write fake rows into the access log', 'denied', 'skipped: add a book first');
+  // 4 ------------------------------------------------------------------ reading the log
+  {
+    const r = await sb.from('access_log').select('id').limit(1);
+    if (isStaff) add(!r.error ? 'pass' : 'fail', 'Staff can read the access log', 'allowed', r.error ? msg(r.error) : 'allowed');
+    else add(r.error || (r.data || []).length === 0 ? 'pass' : 'fail', 'A student cannot read the access log', 'denied / empty', r.error ? 'denied' : `${(r.data || []).length} row(s) visible`);
+  }
+  // 5 ------------------------------------------------------------------ private settings
+  {
+    const r = await sb.from('app_config').select('*');
+    add(r.error || (r.data || []).length === 0 ? 'pass' : 'fail', 'Nobody can read the private settings (staff code)', 'denied / empty', r.error ? 'denied' : `${(r.data || []).length} row(s) visible`);
+  }
+  // 6 ------------------------------------------------------------------ staff-only functions
+  {
+    const r = await sb.rpc('staff_list_users');
+    if (isStaff) add(!r.error ? 'pass' : 'fail', 'Staff can call the staff user list', 'allowed', r.error ? msg(r.error) : 'allowed');
+    else add(r.error ? 'pass' : 'fail', 'A student cannot call staff-only functions', 'denied', r.error ? 'denied' : 'ALLOWED!');
+  }
+  // 7 ------------------------------------------------------------------ approving
+  if (!isStaff) {
+    const r = await sb.rpc('set_user_status', { p_user: myId, p_status: 'approved' });
+    const { data: after } = await sb.from('profiles').select('status').eq('id', myId).maybeSingle();
+    add(r.error && after && after.status === me.status ? 'pass' : 'fail', 'A student cannot approve anyone (not even themselves)', 'denied', r.error ? 'denied' : 'ALLOWED!');
+  }
+  // 8 ------------------------------------------------------------------ catalog changes
+  if (!isStaff) {
+    const r = await sb.from('books').insert({ title: 'SECURITY TEST - delete me', author: 'x' });
+    if (!r.error) await sb.from('books').delete().eq('title', 'SECURITY TEST - delete me');
+    add(r.error ? 'pass' : 'fail', 'A student cannot add books', 'denied', r.error ? 'denied' : 'ALLOWED!');
+  }
+  // 9 ------------------------------------------------------------------ PDFs
+  if (bookWithPdf) {
+    const r = await sb.storage.from('books').createSignedUrl(`${bookWithPdf.id}.pdf`, 30);
+    if (isStaff) add(!r.error ? 'pass' : 'fail', 'Staff can get a link to a PDF', 'allowed', r.error ? msg(r.error) : 'allowed');
+    else add(r.error ? 'pass' : 'fail', 'Cannot get a PDF link without opening it through the app (no log row)', 'denied', r.error ? 'denied' : 'ALLOWED (did you open this book in the last 2 minutes? wait and re-run)');
+  } else add('skip', 'PDF download rules', 'denied/allowed', 'skipped: upload a PDF to a book first');
+  // 10 ----------------------------------------------------------------- pending student cannot open
+  if (!isStaff && me.status !== 'approved' && bookWithPdf) {
+    const r = await sb.rpc('open_book', { p_book_id: bookWithPdf.id });
+    add(r.error ? 'pass' : 'fail', 'A pending/rejected student cannot open e-books', 'denied', r.error ? 'denied: ' + msg(r.error) : 'ALLOWED!');
+  } else add('skip', 'Pending student cannot open e-books', 'denied', 'only runs for an unapproved student account (opening would also write a log row)');
+  // 11 ----------------------------------------------------------------- uploads
+  {
+    const other = (crypto.randomUUID ? crypto.randomUUID() : '00000000-0000-4000-8000-000000000000');
+    const r = await sb.storage.from('avatars').upload(`${other}/security-test.jpg`, new Blob([TINY_JPEG], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });
+    if (!r.error) await sb.storage.from('avatars').remove([`${other}/security-test.jpg`]);
+    add(r.error ? 'pass' : 'fail', "Cannot upload into someone else's photo folder", 'denied', r.error ? 'denied' : 'ALLOWED!');
+  }
+  {
+    const own = `${myId}/security-test.jpg`;
+    const r = await sb.storage.from('avatars').upload(own, new Blob([TINY_JPEG], { type: 'image/jpeg' }), { contentType: 'image/jpeg', upsert: true });
+    if (!r.error) await sb.storage.from('avatars').remove([own]);
+    add(!r.error ? 'pass' : 'fail', 'CAN upload into my own photo folder', 'allowed', r.error ? msg(r.error) : 'allowed');
+  }
+  if (!isStaff) {
+    const r = await sb.storage.from('books').upload('zz-security-test.pdf', TINY_PDF, { contentType: 'application/pdf' });
+    if (!r.error) await sb.storage.from('books').remove(['zz-security-test.pdf']);
+    add(r.error ? 'pass' : 'fail', 'A student cannot upload e-book files', 'denied', r.error ? 'denied' : 'ALLOWED!');
+  }
+
+  // ---- show ----
+  const tbody = $('rows'); tbody.innerHTML = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    [ r.status === 'pass' ? 'PASS' : r.status === 'fail' ? 'FAIL' : 'skip', r.name, r.expected, r.happened ].forEach((t, i) => {
+      const td = document.createElement('td'); td.textContent = t;
+      if (i === 0) { td.className = 'res ' + r.status; }
+      if (i >= 2) td.className = 'note';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  const p = rows.filter(r => r.status === 'pass').length, f = rows.filter(r => r.status === 'fail').length, s = rows.filter(r => r.status === 'skip').length;
+  $('summary').className = f ? 'fail' : 'pass';
+  $('summary').textContent = f ? `${f} check(s) FAILED - do not put real students on this until fixed. (${p} passed, ${s} skipped)` : `All good: ${p} passed, ${s} skipped.`;
+  $('out').style.display = 'block';
+  $('run').disabled = false; $('run').textContent = 'Run the checks again';
+}
+
+$('run').addEventListener('click', runChecks);
+main();
+</script>
+</body>
+</html>
