@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NORSU E-Library — Sign In</title>
+<script>(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="favicon-180.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="authwrap">
+  <button id="themeToggleBtn" class="iconBtn" style="position:fixed;top:16px;right:16px;" aria-label="Toggle dark mode">🌙</button>
+  <div class="authcard">
+    <img src="logo.png" alt="NORSU seal" style="width:64px;height:64px;display:block;margin:0 auto 14px;">
+    <h1 id="formTitle" style="text-align:center">Sign in</h1>
+    <p class="sub" id="formSub" style="text-align:center">NORSU Guihulngan Campus E-Library</p>
+    <div id="errorBox"></div>
+
+    <form id="loginForm">
+      <div class="field"><label>Email</label><input type="email" id="loginEmail" required></div>
+      <div class="field"><label>Password</label><input type="password" id="loginPassword" required></div>
+      <button class="btn" type="submit" style="width:100%">Sign In</button>
+      <p style="text-align:center;margin:12px 0 0;font-size:.82rem;"><a href="#" id="showForgot">Forgot password?</a></p>
+    </form>
+
+    <form id="forgotForm" style="display:none">
+      <p class="sub" style="margin:0 0 14px;">Enter your email and we'll send you a link to reset your password.</p>
+      <div class="field"><label>Email</label><input type="email" id="forgotEmail" required></div>
+      <button class="btn" type="submit" style="width:100%">Send Reset Link</button>
+      <p style="text-align:center;margin:12px 0 0;font-size:.82rem;"><a href="#" id="backToLoginFromForgot">Back to sign in</a></p>
+    </form>
+
+    <form id="registerForm" style="display:none">
+      <div class="field"><label>Full name</label><input type="text" id="regName" required></div>
+      <div class="field"><label>Email</label><input type="email" id="regEmail" required></div>
+      <div class="field"><label>Password</label><input type="password" id="regPassword" required minlength="6"></div>
+      <div class="field"><label>Student/Faculty/Staff ID No.</label><input type="text" id="regIdNumber" required></div>
+      <div class="field"><label>Role</label>
+        <select id="regRole"><option value="Student">Student</option><option value="Faculty">Faculty</option><option value="Staff">Staff</option></select>
+      </div>
+      <div class="field"><label>Program/College</label><input type="text" id="regProgram" placeholder="e.g. BSCS"></div>
+      <div class="field"><label>Staff code (optional — staff only)</label><input type="text" id="regStaffCode" placeholder="Leave blank if you're a student"></div>
+      <button class="btn" type="submit" style="width:100%">Create Account</button>
+    </form>
+
+    <div class="switchline">
+      <span id="toRegister">New here? <a href="#" id="showRegister">Create an account</a></span>
+      <span id="toLogin" style="display:none">Already registered? <a href="#" id="showLogin">Sign in</a></span>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="lib.js"></script>
+<script>
+const errorBox = document.getElementById('errorBox');
+function showError(msg){ errorBox.innerHTML = ''; const d = document.createElement('div'); d.className = 'error'; d.textContent = msg; errorBox.appendChild(d); }
+function showInfo(msg){ errorBox.innerHTML = ''; const d = document.createElement('div'); d.className = 'sub'; d.style.cssText = 'background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);padding:10px 12px;border-radius:8px;margin-bottom:12px;'; d.textContent = msg; errorBox.appendChild(d); }
+function clearError(){ errorBox.innerHTML = ''; }
+function show(id, on, how){ document.getElementById(id).style.display = on ? (how || 'block') : 'none'; }
+
+if (window.sbMissing) showError(window.sbMissingReason);
+
+document.getElementById('showRegister').addEventListener('click', e=>{
+  e.preventDefault(); clearError();
+  show('loginForm', false); show('registerForm', true); show('toRegister', false); show('toLogin', true, 'inline');
+  document.getElementById('formTitle').textContent='Create your account';
+});
+document.getElementById('showLogin').addEventListener('click', e=>{
+  e.preventDefault(); clearError();
+  show('registerForm', false); show('loginForm', true); show('toLogin', false); show('toRegister', true, 'inline');
+  document.getElementById('formTitle').textContent='Sign in';
+});
+
+document.getElementById('loginForm').addEventListener('submit', async e=>{
+  e.preventDefault(); clearError();
+  if (window.sbMissing) { showError(window.sbMissingReason); return; }
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  btn.disabled = false;
+  if (error) { showError(friendlyAuthError(error)); return; }
+  window.location.href = 'app.html';
+});
+
+document.getElementById('showForgot').addEventListener('click', e=>{
+  e.preventDefault(); clearError();
+  show('loginForm', false); show('forgotForm', true); show('toRegister', false);
+  document.getElementById('formTitle').textContent='Reset your password';
+});
+document.getElementById('backToLoginFromForgot').addEventListener('click', e=>{
+  e.preventDefault(); clearError();
+  show('forgotForm', false); show('loginForm', true); show('toRegister', true, 'inline');
+  document.getElementById('formTitle').textContent='Sign in';
+});
+document.getElementById('forgotForm').addEventListener('submit', async e=>{
+  e.preventDefault(); clearError();
+  if (window.sbMissing) { showError(window.sbMissingReason); return; }
+  const email = document.getElementById('forgotEmail').value.trim();
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  // the link in the email brings people back to reset-password.html in THIS same folder
+  const redirectTo = new URL('reset-password.html', window.location.href).href;
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+  btn.disabled = false; btn.textContent = 'Send Reset Link';
+  if (error) { showError(friendlyAuthError(error)); return; }
+  showInfo('If that email is registered, a reset link has been sent. Check your inbox (and spam folder).');
+});
+
+document.getElementById('registerForm').addEventListener('submit', async e=>{
+  e.preventDefault(); clearError();
+  if (window.sbMissing) { showError(window.sbMissingReason); return; }
+  const email = document.getElementById('regEmail').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const meta = {
+    name: document.getElementById('regName').value.trim(),
+    id_number: document.getElementById('regIdNumber').value.trim(),
+    role_requested: document.getElementById('regRole').value,
+    program: document.getElementById('regProgram').value.trim(),
+    staff_code: document.getElementById('regStaffCode').value.trim()
+  };
+  if (!meta.name || !email || !password || !meta.id_number) { showError('Please fill in all required fields.'); return; }
+  if (password.length < 6) { showError('Password must be at least 6 characters.'); return; }
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.disabled = true;
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: meta } });
+  btn.disabled = false;
+  if (error) { showError(friendlyAuthError(error)); return; }
+  // when "Confirm email" is ON, an already-registered address comes back with no identities
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) { showError('That email is already registered.'); return; }
+  if (!data.session) {
+    // "Confirm email" is ON in Supabase: they must click the link in their inbox first
+    show('registerForm', false); show('loginForm', true); show('toLogin', false); show('toRegister', true, 'inline');
+    document.getElementById('formTitle').textContent='Sign in';
+    showInfo('Account created! Please confirm your email (check your inbox), then sign in.');
+    return;
+  }
+  window.location.href = 'app.html';
+});
+
+// already signed in? skip straight to the app
+if (!window.sbMissing) sb.auth.getSession().then(({ data }) => { if (data && data.session) window.location.href = 'app.html'; });
+
+function getEffectiveTheme(){
+  const explicit = document.documentElement.getAttribute('data-theme');
+  if(explicit) return explicit;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+function updateThemeBtn(){ document.getElementById('themeToggleBtn').textContent = getEffectiveTheme()==='dark' ? '☀️' : '🌙'; }
+document.getElementById('themeToggleBtn').addEventListener('click', ()=>{
+  const next = getEffectiveTheme()==='dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try{ localStorage.setItem('theme', next); }catch(e){}
+  updateThemeBtn();
+});
+updateThemeBtn();
+</script>
+<script src="pwtoggle.js"></script>
+</body>
+</html>
